@@ -7,11 +7,19 @@
 what the following rules do, please see the checkstyle configuration
 page at http://checkstyle.sourceforge.net/config.html -->
 
+<<<<<<< HEAD
 <module name="Checker">
 
   <module name="SuppressionFilter">
    <property name="file" value="tools/suppressions.xml"/>
   </module>
+=======
+<module name="OpenPgpChecker">
+
+  <!--<module name="SuppressionFilter">
+   <property name="file" value="tools/suppressions.xml"/>
+  </module>-->
+>>>>>>> openkeychain/master
 
   <module name="RegexpSingleline">
     <!-- Requires a copyright notice in each file.

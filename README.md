@@ -3,7 +3,10 @@ APG (Android Privacy Guard)
 
 OpenPGP for Android.
 
-I'd like to pick this up again, despite the awesome advances of the fork [OpenPGP-Keychain](https://github.com/openpgp-keychain/openpgp-keychain/). Those guys did a great job, but I differ in some of the implementation details and decisions, so I hope the projects can continue to benefit from each other.
+I'd like to pick this up again, despite the awesome advances of the fork
+[OpenPGP-Keychain](https://github.com/openpgp-keychain/openpgp-keychain/). Those guys did a
+great job, but I differ in some of the implementation details and decisions, so I hope the
+projects can continue to benefit from each other.
 
 APG definitely has some catching up to do. :)
 
@@ -21,7 +24,8 @@ APG definitely has some catching up to do. :)
 ```
 
 ## Contributing
-I definitely will need loads of help with this. However, currently it's a lot of refactoring, so things are all over the place a bit.
+I definitely will need loads of help with this. However, currently it's a lot of refactoring, so
+things are all over the place a bit.
 
 I think that is hard to parallelize... but drop me a line, if you fancy a go, perhaps we can work out some tasks that don't interfer with each other much.
 
