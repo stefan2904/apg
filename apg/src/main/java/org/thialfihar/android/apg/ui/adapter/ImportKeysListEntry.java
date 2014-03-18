@@ -125,7 +125,10 @@ public class ImportKeysListEntry implements Serializable, Parcelable {
      * Constructor for later querying from keyserver
      */
     public ImportKeysListEntry() {
+        // keys from keyserver are always public keys
         secretKey = false;
+        // do not select by default
+        mSelected = false;
         userIds = new ArrayList<String>();
     }
 

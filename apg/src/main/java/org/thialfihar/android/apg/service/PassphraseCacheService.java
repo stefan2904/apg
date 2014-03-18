@@ -33,6 +33,7 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
+import android.util.LongSparseArray;
 
 import org.spongycastle.openpgp.PGPException;
 import org.spongycastle.openpgp.PGPPrivateKey;
@@ -47,7 +48,6 @@ import org.thialfihar.android.apg.pgp.PgpKeyHelper;
 import org.thialfihar.android.apg.provider.ProviderHelper;
 
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
 
 /**
@@ -77,7 +77,7 @@ public class PassphraseCacheService extends Service {
 
     private BroadcastReceiver mIntentReceiver;
 
-    private HashMap<Long, String> mPassphraseCache = new HashMap<Long, String>();
+    private LongSparseArray<String> mPassphraseCache = new LongSparseArray<String>();
 
     Context mContext;
 
@@ -348,7 +348,7 @@ public class PassphraseCacheService extends Service {
         Log.d(TAG, "Timeout of keyId " + keyId + ", removed from memory!");
 
         // stop whole service if no cached passphrases remaining
-        if (mPassphraseCache.isEmpty()) {
+        if (mPassphraseCache.size() == 0) {
             Log.d(TAG, "No passphrases remaining in memory, stopping service!");
             stopSelf();
         }

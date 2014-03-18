@@ -39,22 +39,32 @@ import org.thialfihar.android.apg.provider.ProviderHelper;
 import org.thialfihar.android.apg.service.ApgIntentService;
 import org.thialfihar.android.apg.ui.adapter.ImportKeysListEntry;
 import org.thialfihar.android.apg.util.IterableIterator;
+import org.thialfihar.android.apg.util.KeychainServiceListener;
 import org.thialfihar.android.apg.util.Log;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 public class PgpImportExport {
+
     private Context mContext;
     private Progressable mProgress;
+    private KeychainServiceListener mKeychainServiceListener;
 
     public PgpImportExport(Context context, Progressable progress) {
         super();
         this.mContext = context;
         this.mProgress = progress;
+    }
+
+    public PgpImportExport(Context context, Progressable progress,
+                KeychainServiceListener keychainListener) {
+        super();
+        this.mContext = context;
+        this.mProgress = progress;
+        this.mKeychainServiceListener = keychainListener;
     }
 
     public void updateProgress(int message, int current, int total) {
@@ -78,7 +88,6 @@ public class PgpImportExport {
     public boolean uploadKeyRingToServer(KeyServer server, PublicKeyRing keyRing) {
         try {
             server.add(keyRing.getArmoredEncoded(mContext));
-
             return true;
         } catch (IOException e) {
             return false;
@@ -145,59 +154,60 @@ public class PgpImportExport {
         return returnData;
     }
 
-    public Bundle exportKeyRings(ArrayList<Long> keyRingMasterKeyIds, int keyType,
-                                 OutputStream outStream) throws PgpGeneralException, FileNotFoundException,
+    public Bundle exportKeyRings(ArrayList<Long> keyRingRowIds, int keyType,
+                                 OutputStream outStream) throws PgpGeneralException,
             PGPException, IOException {
         Bundle returnData = new Bundle();
 
+        int rowIdsSize = keyRingRowIds.size();
+
         updateProgress(
                 mContext.getResources().getQuantityString(R.plurals.progress_exporting_key,
-                        keyRingMasterKeyIds.size()), 0, 100);
+                        rowIdsSize), 0, 100);
 
         if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
             throw new PgpGeneralException(
                     mContext.getString(R.string.error_external_storage_not_ready));
         }
+        // For each row id
+        for (int i = 0; i < rowIdsSize; ++i) {
+            // Create an output stream
+            ArmoredOutputStream arOutStream = new ArmoredOutputStream(outStream);
+            arOutStream.setHeader("Version", PgpHelper.getFullVersion(mContext));
 
-        if (keyType == Id.type.secret_key) {
-            ArmoredOutputStream outSec = new ArmoredOutputStream(outStream);
-            outSec.setHeader("Version", PgpHelper.getFullVersion(mContext));
-
-            for (int i = 0; i < keyRingMasterKeyIds.size(); ++i) {
-                updateProgress(i * 100 / keyRingMasterKeyIds.size() / 2, 100);
-
-                PGPSecretKeyRing secretKeyRing = ProviderHelper.getPGPSecretKeyRingByMasterKeyId(
-                        mContext, keyRingMasterKeyIds.get(i));
+            // If the keyType is secret get the PGPSecretKeyRing
+            // based on the row id and encode it to the output
+            if (keyType == Id.type.secret_key) {
+                updateProgress(i * 100 / rowIdsSize / 2, 100);
+                PGPSecretKeyRing secretKeyRing =
+                        ProviderHelper.getPGPSecretKeyRingByRowId(mContext, keyRingRowIds.get(i));
 
                 if (secretKeyRing != null) {
-                    secretKeyRing.encode(outSec);
+                    secretKeyRing.encode(arOutStream);
                 }
-            }
-            outSec.close();
-        } else {
-            // export public keyrings...
-            ArmoredOutputStream outPub = new ArmoredOutputStream(outStream);
-            outPub.setHeader("Version", PgpHelper.getFullVersion(mContext));
-
-            for (int i = 0; i < keyRingMasterKeyIds.size(); ++i) {
-                // double the needed time if exporting both public and secret parts
-                if (keyType == Id.type.secret_key) {
-                    updateProgress(i * 100 / keyRingMasterKeyIds.size() / 2, 100);
-                } else {
-                    updateProgress(i * 100 / keyRingMasterKeyIds.size(), 100);
+                if (mKeychainServiceListener.hasServiceStopped()){
+                    arOutStream.close();
+                    return null;
                 }
-
-                PGPPublicKeyRing publicKeyRing = ProviderHelper.getPGPPublicKeyRingByMasterKeyId(
-                        mContext, keyRingMasterKeyIds.get(i));
+            } else {
+                updateProgress(i * 100 / rowIdsSize, 100);
+                PGPPublicKeyRing publicKeyRing =
+                        ProviderHelper.getPGPPublicKeyRingByRowId(mContext, keyRingRowIds.get(i));
 
                 if (publicKeyRing != null) {
-                    publicKeyRing.encode(outPub);
+                    publicKeyRing.encode(arOutStream);
+                }
+
+                if (mKeychainServiceListener.hasServiceStopped()){
+                    arOutStream.close();
+                    return null;
                 }
             }
-            outPub.close();
+
+            arOutStream.close();
         }
 
-        returnData.putInt(ApgIntentService.RESULT_EXPORT, keyRingMasterKeyIds.size());
+        returnData.putInt(ApgIntentService.RESULT_EXPORT, rowIdsSize);
 
         updateProgress(R.string.progress_done, 100, 100);
 
@@ -218,7 +228,7 @@ public class PgpImportExport {
                 for (PGPSecretKey testSecretKey : new IterableIterator<PGPSecretKey>(
                         secretKeyRing.getSecretKeys())) {
                     if (!testSecretKey.isMasterKey()) {
-                        if (PgpKeyHelper.isSecretKeyPrivateEmpty(testSecretKey)) {
+                        if (testSecretKey.isPrivateKeyEmpty()) {
                             // this is bad, something is very wrong...
                             save = false;
                             status = Id.return_value.bad;

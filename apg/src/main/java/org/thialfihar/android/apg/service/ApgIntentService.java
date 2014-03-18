@@ -53,6 +53,7 @@ import org.thialfihar.android.apg.provider.KeychainContract.DataStream;
 import org.thialfihar.android.apg.provider.ProviderHelper;
 import org.thialfihar.android.apg.ui.adapter.ImportKeysListEntry;
 import org.thialfihar.android.apg.util.InputData;
+import org.thialfihar.android.apg.util.KeychainServiceListener;
 import org.thialfihar.android.apg.util.Log;
 
 import java.io.BufferedInputStream;
@@ -74,7 +75,7 @@ import java.util.List;
  * data from the activities or other apps, queues these intents, executes them, and stops itself
  * after doing them.
  */
-public class ApgIntentService extends IntentService implements Progressable {
+public class ApgIntentService extends IntentService implements Progressable, KeychainServiceListener {
 
     /* extras that can be given by intent */
     public static final String EXTRA_MESSENGER = "messenger";
@@ -155,6 +156,7 @@ public class ApgIntentService extends IntentService implements Progressable {
     public static final String EXPORT_KEY_TYPE = "export_key_type";
     public static final String EXPORT_ALL = "export_all";
     public static final String EXPORT_KEY_RING_MASTER_KEY_ID = "export_key_ring_id";
+    public static final String EXPORT_KEY_RING_ROW_ID = "export_key_rind_row_id";
 
     // upload key
     public static final String UPLOAD_KEY_SERVER = "upload_key_server";
@@ -604,13 +606,24 @@ public class ApgIntentService extends IntentService implements Progressable {
                 String passphrase = data.getString(GENERATE_KEY_SYMMETRIC_PASSPHRASE);
 
                 /* Operation */
+                int keysTotal = 2;
+                int keysCreated = 0;
+                setProgress(
+                        getApplicationContext().getResources()
+                            .getQuantityString(R.plurals.progress_generating, keysTotal),
+                        keysCreated,
+                        keysTotal);
                 PgpKeyOperation keyOperations = new PgpKeyOperation(this, this);
 
                 Key masterKey = keyOperations.createKey(Id.choice.algorithm.rsa,
                         4096, passphrase, true);
+                keysCreated++;
+                setProgress(keysCreated, keysTotal);
 
                 Key subKey = keyOperations.createKey(Id.choice.algorithm.rsa,
                         4096, passphrase, false);
+                keysCreated++;
+                setProgress(keysCreated, keysTotal);
 
                 // TODO: default to one master for cert, one sub for encrypt and one sub
                 //       for sign
@@ -671,10 +684,12 @@ public class ApgIntentService extends IntentService implements Progressable {
 
                 String outputFile = data.getString(EXPORT_FILENAME);
 
+                long[] rowIds = new long[0];
+
+                // If not exporting all keys get the rowIds of the keys to export from the intent
                 boolean exportAll = data.getBoolean(EXPORT_ALL);
-                long keyRingMasterKeyId = -1;
                 if (!exportAll) {
-                    keyRingMasterKeyId = data.getLong(EXPORT_KEY_RING_MASTER_KEY_ID);
+                    rowIds = data.getLongArray(EXPORT_KEY_RING_ROW_ID);
                 }
 
                 /* Operation */
@@ -687,24 +702,31 @@ public class ApgIntentService extends IntentService implements Progressable {
                 // OutputStream
                 FileOutputStream outStream = new FileOutputStream(outputFile);
 
-                ArrayList<Long> keyRingMasterKeyIds = new ArrayList<Long>();
+                ArrayList<Long> keyRingRowIds = new ArrayList<Long>();
                 if (exportAll) {
-                    // get all key ring row ids based on export type
 
+                    // get all key ring row ids based on export type
                     if (keyType == Id.type.public_key) {
-                        keyRingMasterKeyIds = ProviderHelper.getPublicKeyRingsMasterKeyIds(this);
+                        keyRingRowIds = ProviderHelper.getPublicKeyRingsRowIds(this);
                     } else {
-                        keyRingMasterKeyIds = ProviderHelper.getSecretKeyRingsMasterKeyIds(this);
+                        keyRingRowIds = ProviderHelper.getSecretKeyRingsRowIds(this);
                     }
                 } else {
-                    keyRingMasterKeyIds.add(keyRingMasterKeyId);
+                    for (long rowId : rowIds) {
+                        keyRingRowIds.add(rowId);
+                    }
                 }
 
-                Bundle resultData = new Bundle();
+                Bundle resultData;
 
-                PgpImportExport pgpImportExport = new PgpImportExport(this, this);
+                PgpImportExport pgpImportExport = new PgpImportExport(this, this, this);
+
                 resultData = pgpImportExport
-                        .exportKeyRings(keyRingMasterKeyIds, keyType, outStream);
+                        .exportKeyRings(keyRingRowIds, keyType, outStream);
+
+                if (mIsCanceled){
+                   new File(outputFile).delete();
+                }
 
                 sendMessageToHandler(ApgIntentServiceHandler.MESSAGE_OKAY, resultData);
             } catch (Exception e) {
@@ -896,5 +918,10 @@ public class ApgIntentService extends IntentService implements Progressable {
 
     public void setProgress(int progress, int max) {
         setProgress(null, progress, max);
+    }
+
+    @Override
+    public boolean hasServiceStopped() {
+        return mIsCanceled;
     }
 }

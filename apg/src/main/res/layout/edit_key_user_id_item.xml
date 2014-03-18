@@ -43,7 +43,7 @@
                     android:paddingRight="5dip"
                     android:text="@string/label_email" />
 
-                <EditText
+                <AutoCompleteTextView
                     android:id="@+id/email"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -65,7 +65,8 @@
                     android:id="@+id/comment"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1" />
+                    android:layout_weight="1"
+                    android:inputType="text"/>
             </TableRow>
         </TableLayout>
 

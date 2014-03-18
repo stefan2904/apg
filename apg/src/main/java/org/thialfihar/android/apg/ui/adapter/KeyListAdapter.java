@@ -21,7 +21,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Color;
-import android.support.v4.widget.CursorAdapter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,12 +35,12 @@ import org.thialfihar.android.apg.util.Log;
 import se.emilsjolander.stickylistheaders.StickyListHeadersAdapter;
 
 import java.util.HashMap;
-import java.util.Set;
 
 /**
  * Implements StickyListHeadersAdapter from library
  */
-public class KeyListPublicAdapter extends CursorAdapter implements StickyListHeadersAdapter {
+public class KeyListAdapter extends HighlightQueryCursorAdapter
+        implements StickyListHeadersAdapter {
     private LayoutInflater mInflater;
     private int mSectionColumnIndex;
     private int mIndexUserId;
@@ -50,9 +49,8 @@ public class KeyListPublicAdapter extends CursorAdapter implements StickyListHea
     @SuppressLint("UseSparseArrays")
     private HashMap<Integer, Boolean> mSelection = new HashMap<Integer, Boolean>();
 
-    public KeyListPublicAdapter(Context context, Cursor c, int flags, int sectionColumnIndex) {
+    public KeyListAdapter(Context context, Cursor c, int flags, int sectionColumnIndex) {
         super(context, c, flags);
-
         mInflater = LayoutInflater.from(context);
         mSectionColumnIndex = sectionColumnIndex;
         initIndex(c);
@@ -93,12 +91,12 @@ public class KeyListPublicAdapter extends CursorAdapter implements StickyListHea
         String userId = cursor.getString(mIndexUserId);
         String[] userIdSplit = PgpKeyHelper.splitUserId(userId);
         if (userIdSplit[0] != null) {
-            mainUserId.setText(userIdSplit[0]);
+            mainUserId.setText(highlightSearchQuery(userIdSplit[0]));
         } else {
             mainUserId.setText(R.string.user_id_no_name);
         }
         if (userIdSplit[1] != null) {
-            mainUserIdRest.setText(userIdSplit[1]);
+            mainUserIdRest.setText(highlightSearchQuery(userIdSplit[1]));
             mainUserIdRest.setVisibility(View.VISIBLE);
         } else {
             mainUserIdRest.setVisibility(View.GONE);
@@ -114,7 +112,7 @@ public class KeyListPublicAdapter extends CursorAdapter implements StickyListHea
 
     @Override
     public View newView(Context context, Cursor cursor, ViewGroup parent) {
-        return mInflater.inflate(R.layout.key_list_public_item, null);
+        return mInflater.inflate(R.layout.key_list_item, null);
     }
 
     /**
@@ -129,7 +127,7 @@ public class KeyListPublicAdapter extends CursorAdapter implements StickyListHea
         HeaderViewHolder holder;
         if (convertView == null) {
             holder = new HeaderViewHolder();
-            convertView = mInflater.inflate(R.layout.key_list_public_header, parent, false);
+            convertView = mInflater.inflate(R.layout.key_list_header, parent, false);
             holder.text = (TextView) convertView.findViewById(R.id.stickylist_header_text);
             convertView.setTag(holder);
         } else {
@@ -193,15 +191,6 @@ public class KeyListPublicAdapter extends CursorAdapter implements StickyListHea
         notifyDataSetChanged();
     }
 
-    public boolean isPositionChecked(int position) {
-        Boolean result = mSelection.get(position);
-        return result == null ? false : result;
-    }
-
-    public Set<Integer> getCurrentCheckedPosition() {
-        return mSelection.keySet();
-    }
-
     public void removeSelection(int position) {
         mSelection.remove(position);
         notifyDataSetChanged();
@@ -220,11 +209,12 @@ public class KeyListPublicAdapter extends CursorAdapter implements StickyListHea
         /**
          * Change color for multi-selection
          */
-        // default color
-        v.setBackgroundColor(Color.TRANSPARENT);
         if (mSelection.get(position) != null && mSelection.get(position).booleanValue()) {
-            // this is a selected position, change color!
+            // color for selected items
             v.setBackgroundColor(parent.getResources().getColor(R.color.emphasis));
+        } else {
+            // default color
+            v.setBackgroundColor(Color.TRANSPARENT);
         }
         return v;
     }

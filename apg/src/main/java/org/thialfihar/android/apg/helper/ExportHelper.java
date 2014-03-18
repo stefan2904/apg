@@ -17,6 +17,7 @@
 package org.thialfihar.android.apg.helper;
 
 import android.app.ProgressDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -30,7 +31,6 @@ import org.thialfihar.android.apg.Constants;
 import org.thialfihar.android.apg.Id;
 import org.thialfihar.android.apg.R;
 import org.thialfihar.android.apg.compatibility.DialogFragmentWorkaround;
-import org.thialfihar.android.apg.provider.ProviderHelper;
 import org.thialfihar.android.apg.service.ApgIntentService;
 import org.thialfihar.android.apg.service.ApgIntentServiceHandler;
 import org.thialfihar.android.apg.ui.dialog.DeleteKeyDialogFragment;
@@ -63,7 +63,7 @@ public class ExportHelper {
     /**
      * Show dialog where to export keys
      */
-    public void showExportKeysDialog(final Uri dataUri, final int keyType,
+    public void showExportKeysDialog(final long[] rowIds, final int keyType,
             final String exportFilename) {
         mExportFilename = exportFilename;
 
@@ -75,7 +75,7 @@ public class ExportHelper {
                     Bundle data = message.getData();
                     mExportFilename = data.getString(FileDialogFragment.MESSAGE_DATA_FILENAME);
 
-                    exportKeys(dataUri, keyType);
+                    exportKeys(rowIds, keyType);
                 }
             }
         };
@@ -86,7 +86,7 @@ public class ExportHelper {
         DialogFragmentWorkaround.INTERFACE.runnableRunDelayed(new Runnable() {
             public void run() {
                 String title = null;
-                if (dataUri == null) {
+                if (rowIds == null) {
                     // export all keys
                     title = mActivity.getString(R.string.title_export_keys);
                 } else {
@@ -112,11 +112,11 @@ public class ExportHelper {
     /**
      * Export keys
      */
-    public void exportKeys(Uri dataUri, int keyType) {
+    public void exportKeys(long[] rowIds, int keyType) {
         Log.d(Constants.TAG, "exportKeys started");
 
         // Send all information needed to service to export key in other thread
-        Intent intent = new Intent(mActivity, ApgIntentService.class);
+        final Intent intent = new Intent(mActivity, ApgIntentService.class);
 
         intent.setAction(ApgIntentService.ACTION_EXPORT_KEYRING);
 
@@ -126,20 +126,23 @@ public class ExportHelper {
         data.putString(ApgIntentService.EXPORT_FILENAME, mExportFilename);
         data.putInt(ApgIntentService.EXPORT_KEY_TYPE, keyType);
 
-        if (dataUri == null) {
+        if (rowIds == null) {
             data.putBoolean(ApgIntentService.EXPORT_ALL, true);
         } else {
-            // TODO: put data uri into service???
-            long keyRingMasterKeyId = ProviderHelper.getMasterKeyId(mActivity, dataUri);
-
-            data.putLong(ApgIntentService.EXPORT_KEY_RING_MASTER_KEY_ID, keyRingMasterKeyId);
+            data.putLongArray(ApgIntentService.EXPORT_KEY_RING_ROW_ID, rowIds);
         }
 
         intent.putExtra(ApgIntentService.EXTRA_DATA, data);
 
         // Message is received after exporting is done in ApgService
         ApgIntentServiceHandler exportHandler = new ApgIntentServiceHandler(mActivity,
-                R.string.progress_exporting, ProgressDialog.STYLE_HORIZONTAL) {
+                mActivity.getString(R.string.progress_exporting),
+                ProgressDialog.STYLE_HORIZONTAL, true, new DialogInterface.OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialogInterface) {
+                mActivity.stopService(intent);
+            }
+        }) {
             public void handleMessage(Message message) {
                 // handle messages by standard ApgHandler first
                 super.handleMessage(message);
@@ -160,7 +163,7 @@ public class ExportHelper {
                     Toast.makeText(mActivity, toastMessage, Toast.LENGTH_SHORT).show();
 
                 }
-            };
+            }
         };
 
         // Create a new Messenger for the communication back

@@ -23,6 +23,7 @@ import android.support.v4.content.AsyncTaskLoader;
 import org.spongycastle.openpgp.PGPKeyRing;
 import org.spongycastle.openpgp.PGPObjectFactory;
 import org.spongycastle.openpgp.PGPUtil;
+
 import org.thialfihar.android.apg.Constants;
 import org.thialfihar.android.apg.util.InputData;
 import org.thialfihar.android.apg.util.Log;
@@ -34,8 +35,23 @@ import java.util.ArrayList;
 
 public class ImportKeysListLoader
     extends AsyncTaskLoader<AsyncTaskResultWrapper<ArrayList<ImportKeysListEntry>>> {
-    private Context mContext;
 
+    public static class FileHasNoContent extends Exception {
+    }
+
+    public static class NonPgpPartException extends Exception {
+        private int mCount;
+
+        public NonPgpPartException(int count) {
+            mCount = count;
+        }
+
+        public int getCount() {
+            return mCount;
+        }
+    }
+
+    private Context mContext;
     private InputData mInputData;
 
     private ArrayList<ImportKeysListEntry> mData = new ArrayList<ImportKeysListEntry>();
@@ -87,11 +103,15 @@ public class ImportKeysListLoader
     /**
      * Reads all PGPKeyRing objects from input
      *
-     * @param keyringBytes
+     * @param inputData
      * @return
      */
     private void generateListOfKeyrings(InputData inputData) {
-        PositionAwareInputStream progressIn = new PositionAwareInputStream(inputData.getInputStream());
+        boolean isEmpty = true;
+        int nonPgpCounter = 0;
+
+        PositionAwareInputStream progressIn = new PositionAwareInputStream(
+                inputData.getInputStream());
 
         // need to have access to the bufferedInput, so we can reuse it for the possible
         // PGPObject chunks after the first one, e.g. files with several consecutive ASCII
@@ -101,6 +121,7 @@ public class ImportKeysListLoader
 
             // read all available blocks... (asc files can contain many blocks with BEGIN END)
             while (bufferedInput.available() > 0) {
+                isEmpty = false;
                 InputStream in = PGPUtil.getDecoderStream(bufferedInput);
                 PGPObjectFactory objectFactory = new PGPObjectFactory(in);
 
@@ -114,11 +135,25 @@ public class ImportKeysListLoader
                         addToData(newKeyring);
                     } else {
                         Log.e(Constants.TAG, "Object not recognized as PGPKeyRing!", new Exception());
+                        nonPgpCounter++;
                     }
                 }
             }
         } catch (Exception e) {
             Log.e(Constants.TAG, "Exception on parsing key file!", e);
+            mEntryListWrapper = new AsyncTaskResultWrapper<ArrayList<ImportKeysListEntry>>(mData, e);
+            nonPgpCounter = 0;
+        }
+
+        if (isEmpty) {
+            Log.e(Constants.TAG, "File has no content!", new FileHasNoContent());
+            mEntryListWrapper = new AsyncTaskResultWrapper<ArrayList<ImportKeysListEntry>>
+                    (mData, new FileHasNoContent());
+        }
+
+        if (nonPgpCounter > 0) {
+            mEntryListWrapper = new AsyncTaskResultWrapper<ArrayList<ImportKeysListEntry>>
+                    (mData, new NonPgpPartException(nonPgpCounter));
         }
     }
 

@@ -17,7 +17,7 @@
 
 package org.thialfihar.android.apg.ui;
 
-import android.app.Activity;
+import android.content.Context;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.net.Uri;
@@ -28,8 +28,16 @@ import android.support.v4.content.Loader;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import org.thialfihar.android.apg.Id;
 import org.thialfihar.android.apg.R;
@@ -48,12 +56,17 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
         LoaderManager.LoaderCallbacks<Cursor> {
     public static final String ARG_PRESELECTED_KEY_IDS = "preselected_key_ids";
 
-    private Activity mActivity;
     private SelectKeyCursorAdapter mAdapter;
-    private ListView mListView;
     private EditText mSearchView;
     private long mSelectedMasterKeyIds[];
     private String mCurQuery;
+
+    // copied from ListFragment
+    static final int INTERNAL_EMPTY_ID = 0x00ff0001;
+    static final int INTERNAL_PROGRESS_CONTAINER_ID = 0x00ff0002;
+    static final int INTERNAL_LIST_CONTAINER_ID = 0x00ff0003;
+    // added for search view
+    static final int SEARCH_ID = 0x00ff0004;
 
     /**
      * Creates new instance of this fragment
@@ -72,9 +85,83 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mSearchView = (EditText) getActivity().findViewById(R.id.select_public_key_search);
-        mSearchView.addTextChangedListener(this);
         mSelectedMasterKeyIds = getArguments().getLongArray(ARG_PRESELECTED_KEY_IDS);
+    }
+
+    /**
+     * Copied from ListFragment and added EditText for search on top of list.
+     * We do not use a custom layout here, because this breaks the progress bar functionality
+     * of ListFragment.
+     *
+     * @param inflater
+     * @param container
+     * @param savedInstanceState
+     * @return
+     */
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        final Context context = getActivity();
+
+        FrameLayout root = new FrameLayout(context);
+
+        // ------------------------------------------------------------------
+
+        LinearLayout pframe = new LinearLayout(context);
+        pframe.setId(INTERNAL_PROGRESS_CONTAINER_ID);
+        pframe.setOrientation(LinearLayout.VERTICAL);
+        pframe.setVisibility(View.GONE);
+        pframe.setGravity(Gravity.CENTER);
+
+        ProgressBar progress = new ProgressBar(context, null,
+                android.R.attr.progressBarStyleLarge);
+        pframe.addView(progress, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        root.addView(pframe, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+
+        // ------------------------------------------------------------------
+
+        FrameLayout lframe = new FrameLayout(context);
+        lframe.setId(INTERNAL_LIST_CONTAINER_ID);
+
+        TextView tv = new TextView(getActivity());
+        tv.setId(INTERNAL_EMPTY_ID);
+        tv.setGravity(Gravity.CENTER);
+        lframe.addView(tv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+
+        // Added for search view: linearLayout, mSearchView
+        LinearLayout linearLayout = new LinearLayout(context);
+        linearLayout.setOrientation(LinearLayout.VERTICAL);
+
+        mSearchView = new EditText(context);
+        mSearchView.setId(SEARCH_ID);
+        mSearchView.setHint(R.string.menu_search);
+        mSearchView.setCompoundDrawablesWithIntrinsicBounds(
+                getResources().getDrawable(R.drawable.ic_action_search), null, null, null);
+
+        linearLayout.addView(mSearchView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ListView lv = new ListView(getActivity());
+        lv.setId(android.R.id.list);
+        lv.setDrawSelectorOnTop(false);
+        linearLayout.addView(lv, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+
+        lframe.addView(linearLayout, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+
+        root.addView(lframe, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+
+        // ------------------------------------------------------------------
+
+        root.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.FILL_PARENT, ViewGroup.LayoutParams.FILL_PARENT));
+
+        return root;
     }
 
     /**
@@ -84,15 +171,15 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
 
-        mActivity = getActivity();
-        mListView = getListView();
+        getListView().setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
 
-        mListView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
         // Give some text to display if there is no data. In a real
         // application this would come from a resource.
         setEmptyText(getString(R.string.list_empty));
 
-        mAdapter = new SelectKeyCursorAdapter(mActivity, null, 0, mListView, Id.type.public_key);
+        mSearchView.addTextChangedListener(this);
+
+        mAdapter = new SelectKeyCursorAdapter(getActivity(), null, 0, getListView(), Id.type.public_key);
 
         setListAdapter(mAdapter);
 
@@ -111,11 +198,11 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
      */
     private void preselectMasterKeyIds(long[] masterKeyIds) {
         if (masterKeyIds != null) {
-            for (int i = 0; i < mListView.getCount(); ++i) {
+            for (int i = 0; i < getListView().getCount(); ++i) {
                 long keyId = mAdapter.getMasterKeyId(i);
-                for (int j = 0; j < masterKeyIds.length; ++j) {
-                    if (keyId == masterKeyIds[j]) {
-                        mListView.setItemChecked(i, true);
+                for (long masterKeyId : masterKeyIds) {
+                    if (keyId == masterKeyId) {
+                        getListView().setItemChecked(i, true);
                         break;
                     }
                 }
@@ -132,8 +219,8 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
         // mListView.getCheckedItemIds() would give the row ids of the KeyRings not the master key
         // ids!
         Vector<Long> vector = new Vector<Long>();
-        for (int i = 0; i < mListView.getCount(); ++i) {
-            if (mListView.isItemChecked(i)) {
+        for (int i = 0; i < getListView().getCount(); ++i) {
+            if (getListView().isItemChecked(i)) {
                 vector.add(mAdapter.getMasterKeyId(i));
             }
         }
@@ -154,8 +241,8 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
      */
     public String[] getSelectedUserIds() {
         Vector<String> userIds = new Vector<String>();
-        for (int i = 0; i < mListView.getCount(); ++i) {
-            if (mListView.isItemChecked(i)) {
+        for (int i = 0; i < getListView().getCount(); ++i) {
+            if (getListView().isItemChecked(i)) {
                 userIds.add((String) mAdapter.getUserId(i));
             }
         }
@@ -173,7 +260,7 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
 
         // These are the rows that we will retrieve.
         long now = new Date().getTime() / 1000;
-        String[] projection = new String[] {
+        String[] projection = new String[]{
                 KeyRings._ID,
                 KeyRings.MASTER_KEY_ID,
                 UserIds.USER_ID,
@@ -204,22 +291,6 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
             inMasterKeyList += ")";
         }
 
-        // if (searchString != null && searchString.trim().length() > 0) {
-        // String[] chunks = searchString.trim().split(" +");
-        // qb.appendWhere("(EXISTS (SELECT tmp." + UserIds._ID + " FROM " + UserIds.TABLE_NAME
-        // + " AS tmp WHERE " + "tmp." + UserIds.KEY_ID + " = " + Keys.TABLE_NAME + "."
-        // + Keys._ID);
-        // for (int i = 0; i < chunks.length; ++i) {
-        // qb.appendWhere(" AND tmp." + UserIds.USER_ID + " LIKE ");
-        // qb.appendWhereEscapeString("%" + chunks[i] + "%");
-        // }
-        // qb.appendWhere("))");
-        //
-        // if (inIdList != null) {
-        // qb.appendWhere(" OR (" + inIdList + ")");
-        // }
-        // }
-
         String orderBy = UserIds.USER_ID + " ASC";
         if (inMasterKeyList != null) {
             // sort by selected master keys
@@ -229,7 +300,7 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
         String whereArgs[] = null;
         if (mCurQuery != null) {
             where = UserIds.USER_ID + " LIKE ?";
-            whereArgs = new String[] {mCurQuery + "%"};
+            whereArgs = new String[] {"%" + mCurQuery + "%"};
         }
 
         // Now create and return a CursorLoader that will take care of
@@ -241,6 +312,7 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
     public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
         // Swap the new cursor in. (The framework will take care of closing the
         // old cursor once we return.)
+        mAdapter.setSearchQuery(mCurQuery);
         mAdapter.swapCursor(data);
 
         // The list should now be shown.
@@ -274,8 +346,7 @@ public class SelectPublicKeyFragment extends ListFragmentWorkaround implements T
 
     @Override
     public void afterTextChanged(Editable editable) {
-        String newQuery = !TextUtils.isEmpty(editable.toString()) ? editable.toString() : null;
-        mCurQuery = newQuery;
+        mCurQuery = !TextUtils.isEmpty(editable.toString()) ? editable.toString() : null;
         getLoaderManager().restartLoader(0, null, this);
     }
 }

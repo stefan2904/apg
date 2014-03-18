@@ -386,7 +386,7 @@ public class DecryptActivity extends DrawerActivity {
         if (filename.endsWith(".asc") || filename.endsWith(".gpg") || filename.endsWith(".pgp")) {
             filename = filename.substring(0, filename.length() - 4);
         }
-        mOutputFilename = Constants.path.APP_DIR + "/" + filename;
+        mOutputFilename = Constants.Path.APP_DIR + "/" + filename;
     }
 
     private void updateSource() {
@@ -533,6 +533,12 @@ public class DecryptActivity extends DrawerActivity {
                 Log.e(Constants.TAG, "File not found!", e);
                 AppMsg.makeText(this, getString(R.string.error_file_not_found, e.getMessage()),
                         AppMsg.STYLE_ALERT).show();
+            } finally {
+                try {
+                    if (inStream != null) {
+                        inStream.close();
+                    }
+                } catch (Exception e){ }
             }
         } else {
             inStream = new ByteArrayInputStream(mMessage.getText().toString().getBytes());
@@ -649,7 +655,7 @@ public class DecryptActivity extends DrawerActivity {
 
         // Message is received after encrypting is done in ApgService
         ApgIntentServiceHandler saveHandler = new ApgIntentServiceHandler(this,
-                R.string.progress_decrypting, ProgressDialog.STYLE_HORIZONTAL) {
+                getString(R.string.progress_decrypting), ProgressDialog.STYLE_HORIZONTAL) {
             public void handleMessage(Message message) {
                 // handle messages by standard ApgHandler first
                 super.handleMessage(message);
@@ -747,8 +753,6 @@ public class DecryptActivity extends DrawerActivity {
                     }
                 }
             }
-
-            ;
         };
 
         // Create a new Messenger for the communication back

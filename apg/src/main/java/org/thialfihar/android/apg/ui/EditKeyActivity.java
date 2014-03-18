@@ -136,14 +136,14 @@ public class EditKeyActivity extends ActionBarActivity {
      * @param intent
      */
     private void handleActionCreateKey(Intent intent) {
-        // Inflate a "Done"/"Cancel" custom action bar
-        ActionBarHelper.setDoneCancelView(getSupportActionBar(), R.string.btn_save,
+        // Inflate a "Save"/"Cancel" custom action bar
+        ActionBarHelper.setTwoButtonView(getSupportActionBar(), R.string.btn_save, R.drawable.ic_action_save,
                 new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
                         saveClicked();
                     }
-                }, R.string.btn_do_not_save, new View.OnClickListener() {
+                }, R.string.btn_do_not_save, R.drawable.ic_action_cancel, new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
                         cancelClicked();
@@ -189,8 +189,8 @@ public class EditKeyActivity extends ActionBarActivity {
 
                     // Message is received after generating is done in ApgService
                     ApgIntentServiceHandler saveHandler = new ApgIntentServiceHandler(
-                            this, R.string.progress_generating, ProgressDialog.STYLE_SPINNER, true,
-
+                            this, getResources().getQuantityString(R.plurals.progress_generating, 1),
+                            ProgressDialog.STYLE_HORIZONTAL, true,
                             new DialogInterface.OnCancelListener() {
                                 @Override
                                 public void onCancel(DialogInterface dialog) {
@@ -222,7 +222,7 @@ public class EditKeyActivity extends ActionBarActivity {
 
                                 buildLayout();
                             }
-                        };
+                        }
                     };
 
                     // Create a new Messenger for the communication back
@@ -246,8 +246,8 @@ public class EditKeyActivity extends ActionBarActivity {
      * @param intent
      */
     private void handleActionEditKey(Intent intent) {
-        // Inflate a "Done"/"Cancel" custom action bar
-        ActionBarHelper.setDoneView(getSupportActionBar(), R.string.btn_save,
+        // Inflate a "Save"/"Cancel" custom action bar
+        ActionBarHelper.setOneButtonView(getSupportActionBar(), R.string.btn_save, R.drawable.ic_action_save,
                 new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
@@ -263,10 +263,8 @@ public class EditKeyActivity extends ActionBarActivity {
         } else {
             Log.d(Constants.TAG, "uri: " + mDataUri);
 
-            long keyRingRowId = Long.valueOf(mDataUri.getLastPathSegment());
-
             // get master key id using row id
-            KeyRing keyRing = mProvider.getSecretKeyRingByRowId(keyRingRowId);
+            KeyRing keyRing = mProvider.getKeyRing(mDataUri);
             Key masterKey = keyRing.getMasterKey();
             long masterKeyId = masterKey.getKeyId();
             mMasterCanSign = masterKey.isSigningKey();
@@ -328,8 +326,8 @@ public class EditKeyActivity extends ActionBarActivity {
             cancelClicked();
             return true;
         case R.id.menu_key_edit_export_file:
-            mExportHelper.showExportKeysDialog(mDataUri, Id.type.secret_key, Constants.path.APP_DIR
-                    + "/secexport.asc");
+            long[] ids = new long[]{Long.valueOf(mDataUri.getLastPathSegment())};
+            mExportHelper.showExportKeysDialog(ids, Id.type.secret_key, Constants.Path.APP_DIR_FILE_SEC);
             return true;
         case R.id.menu_key_edit_delete: {
             // Message is received after key is deleted
@@ -544,7 +542,7 @@ public class EditKeyActivity extends ActionBarActivity {
 
             // Message is received after saving is done in ApgService
             ApgIntentServiceHandler saveHandler = new ApgIntentServiceHandler(this,
-                    R.string.progress_saving, ProgressDialog.STYLE_HORIZONTAL) {
+                    getString(R.string.progress_saving), ProgressDialog.STYLE_HORIZONTAL) {
                 public void handleMessage(Message message) {
                     // handle messages by standard ApgHandler first
                     super.handleMessage(message);
@@ -562,7 +560,7 @@ public class EditKeyActivity extends ActionBarActivity {
                         setResult(RESULT_OK, data);
                         finish();
                     }
-                };
+                }
             };
 
             // Create a new Messenger for the communication back
@@ -602,8 +600,6 @@ public class EditKeyActivity extends ActionBarActivity {
                 userId = editor.getValue();
             } catch (UserIdEditor.NoNameException e) {
                 throw new PgpGeneralException(this.getString(R.string.error_user_id_needs_a_name));
-            } catch (UserIdEditor.InvalidEmailException e) {
-                throw new PgpGeneralException(e.getMessage());
             }
 
             if (userId.equals("")) {
